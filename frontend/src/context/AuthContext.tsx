@@ -48,10 +48,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         remember_me: rememberMe,
       });
       setTokens(data.access_token, data.refresh_token);
-      await fetchCurrentUser();
+      if (data.user) {
+        setUser({
+          id: data.user.id,
+          full_name: data.user.full_name,
+          email: data.user.email,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      }
+      try {
+        const fullUser = await api.get<User>('/users/me');
+        if (fullUser) setUser(fullUser);
+      } catch {
+        // Fallback user state already set above from login response
+      }
     } catch (error) {
-      setIsLoading(false);
+      clearTokens();
+      setUser(null);
       throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -70,10 +88,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         confirm_password: confirmPassword,
       });
       setTokens(data.access_token, data.refresh_token);
-      await fetchCurrentUser();
+      if (data.user) {
+        setUser({
+          id: data.user.id,
+          full_name: data.user.full_name,
+          email: data.user.email,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      }
+      try {
+        const fullUser = await api.get<User>('/users/me');
+        if (fullUser) setUser(fullUser);
+      } catch {
+        // Fallback user state already set above from register response
+      }
     } catch (error) {
-      setIsLoading(false);
+      clearTokens();
+      setUser(null);
       throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 

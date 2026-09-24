@@ -57,8 +57,8 @@ export async function apiRequest<T = any>(
   let response: Response;
   try {
     response = await fetch(url, config);
-  } catch (networkError) {
-    throw new Error('Network error. Please check your internet connection.');
+  } catch {
+    throw new Error('Unable to connect to the backend server. Please verify the backend is running on http://localhost:8000.');
   }
 
   // Handle 401 Unauthorized for token refresh
@@ -109,6 +109,9 @@ export async function apiRequest<T = any>(
   }
 
   if (!response.ok) {
+    if (response.status === 502 || response.status === 503 || response.status === 504) {
+      throw new Error('Backend server is offline or unreachable (port 8000). Please ensure backend is running.');
+    }
     let errorDetail = 'Something went wrong';
     try {
       const errorJson = await response.json();
