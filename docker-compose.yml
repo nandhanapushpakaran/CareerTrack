@@ -40,6 +40,14 @@ services:
       - ACCESS_TOKEN_EXPIRE_MINUTES=15
       - REFRESH_TOKEN_EXPIRE_DAYS=7
       - CORS_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:80,http://localhost
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_TLS=${SMTP_TLS:-true}
+      - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL:-noreply@careertrack.com}
+      - EMAILS_FROM_NAME=${EMAILS_FROM_NAME:-CareerTrack}
     ports:
       - "8000:8000"
     healthcheck:

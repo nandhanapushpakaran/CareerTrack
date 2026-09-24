@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { ArrowLeft, Briefcase, CheckCircle, Lock, Mail } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Briefcase, CheckCircle, ExternalLink, Lock, Mail } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { Modal } from '../components/common/Modal';
@@ -29,18 +29,16 @@ export const LoginPage: React.FC = () => {
   // Forgot Password Modal State
   const [isForgotOpen, setIsForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotNewPassword, setForgotNewPassword] = useState('');
-  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
+  const [devResetUrl, setDevResetUrl] = useState<string | null>(null);
 
   const isExpired = searchParams.get('expired') === 'true';
 
   const {
     register,
     handleSubmit,
-    setValue,
     getValues,
     formState: { errors },
   } = useForm<LoginFormData>({
@@ -68,17 +66,17 @@ export const LoginPage: React.FC = () => {
 
   const openForgotPassword = () => {
     setForgotEmail(getValues('email') || '');
-    setForgotNewPassword('');
-    setForgotConfirmPassword('');
     setForgotError(null);
     setForgotSuccess(null);
+    setDevResetUrl(null);
     setIsForgotOpen(true);
   };
 
-  const handleResetSubmit = async (e: React.FormEvent) => {
+  const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setForgotError(null);
     setForgotSuccess(null);
+    setDevResetUrl(null);
 
     const email = forgotEmail.trim();
     if (!email) {
@@ -86,36 +84,22 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
-    if (forgotNewPassword.length < 8) {
-      setForgotError('Password must be at least 8 characters long.');
-      return;
-    }
-
-    if (forgotNewPassword !== forgotConfirmPassword) {
-      setForgotError('Passwords do not match.');
-      return;
-    }
-
     setForgotLoading(true);
     try {
-      const response = await apiRequest('/auth/reset-password-direct', {
+      const response = await apiRequest('/auth/forgot-password', {
         method: 'POST',
-        body: JSON.stringify({
-          email: email,
-          new_password: forgotNewPassword,
-          confirm_new_password: forgotConfirmPassword,
-        }),
+        body: JSON.stringify({ email }),
       });
 
-      setForgotSuccess(response.message || 'Password reset successfully!');
-      setValue('email', email);
-
-      setTimeout(() => {
-        setIsForgotOpen(false);
-        setLoginSuccessNotice('Password reset successfully! Please sign in with your new password.');
-      }, 1200);
+      setForgotSuccess(
+        response.message ||
+          'If an account exists for this email, password reset instructions have been sent.'
+      );
+      if (response.dev_reset_url) {
+        setDevResetUrl(response.dev_reset_url);
+      }
     } catch (err: any) {
-      setForgotError(err.message || 'Failed to reset password. Please check your email.');
+      setForgotError(err.message || 'Failed to send reset link. Please try again.');
     } finally {
       setForgotLoading(false);
     }
@@ -241,74 +225,106 @@ export const LoginPage: React.FC = () => {
       <Modal
         isOpen={isForgotOpen}
         onClose={() => setIsForgotOpen(false)}
-        title="Reset Password"
-        description="Enter your registered email address and choose a new password."
+        title="Forgot Password"
+        description="Enter your registered email address and we will send you a secure link to reset your password."
         maxWidth="md"
       >
-        <form onSubmit={handleResetSubmit} className="space-y-4 pt-2">
-          {forgotError && (
-            <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 p-3 text-xs font-medium text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
-              {forgotError}
+        {forgotSuccess ? (
+          <div className="py-3 text-center space-y-4">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+              <Mail className="h-6 w-6" />
             </div>
-          )}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Check your email
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 max-w-sm mx-auto leading-relaxed">
+                {forgotSuccess}
+              </p>
+              <p className="text-[11px] text-slate-400 mt-2">
+                The link is time-limited and will expire in 30 minutes for security.
+              </p>
 
-          {forgotSuccess && (
-            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 p-3 text-xs font-medium text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900 flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              <span>{forgotSuccess}</span>
+              {devResetUrl && (
+                <div className="mt-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-left text-xs space-y-2">
+                  <div className="flex items-center gap-1.5 font-semibold text-amber-900 dark:text-amber-200">
+                    <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                    <span>Local Development Notice</span>
+                  </div>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                    No SMTP mail server is configured in <code className="px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/60 font-mono text-[10px]">.env</code>, so real emails cannot be dispatched across the internet to external inboxes.
+                  </p>
+                  <div className="pt-1">
+                    <a
+                      href={devResetUrl}
+                      onClick={() => setIsForgotOpen(false)}
+                      className="inline-flex items-center gap-1.5 font-semibold text-indigo-600 dark:text-indigo-400 hover:underline text-xs"
+                    >
+                      <span>Click here to test Reset Password</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-
-          <Input
-            label="Email Address"
-            type="email"
-            placeholder="you@example.com"
-            value={forgotEmail}
-            onChange={(e) => setForgotEmail(e.target.value)}
-            leftIcon={<Mail className="w-4 h-4" />}
-            required
-          />
-
-          <Input
-            label="New Password"
-            type="password"
-            placeholder="••••••••"
-            value={forgotNewPassword}
-            onChange={(e) => setForgotNewPassword(e.target.value)}
-            leftIcon={<Lock className="w-4 h-4" />}
-            helperText="At least 8 characters with uppercase, lowercase, digit, and symbol."
-            required
-          />
-
-          <Input
-            label="Confirm New Password"
-            type="password"
-            placeholder="••••••••"
-            value={forgotConfirmPassword}
-            onChange={(e) => setForgotConfirmPassword(e.target.value)}
-            leftIcon={<Lock className="w-4 h-4" />}
-            required
-          />
-
-          <div className="flex items-center justify-end gap-3 pt-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="md"
-              onClick={() => setIsForgotOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              size="md"
-              isLoading={forgotLoading}
-            >
-              Reset Password
-            </Button>
+            <div className="flex items-center justify-center gap-3 pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={() => setForgotSuccess(null)}
+              >
+                Send to different email
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={() => setIsForgotOpen(false)}
+              >
+                Done
+              </Button>
+            </div>
           </div>
-        </form>
+        ) : (
+          <form onSubmit={handleForgotSubmit} className="space-y-4 pt-2">
+            {forgotError && (
+              <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 p-3 text-xs font-medium text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
+                {forgotError}
+              </div>
+            )}
+
+            <Input
+              label="Email Address"
+              type="email"
+              placeholder="you@example.com"
+              value={forgotEmail}
+              onChange={(e) => setForgotEmail(e.target.value)}
+              leftIcon={<Mail className="w-4 h-4" />}
+              helperText="We will send password reset instructions to this address."
+              required
+            />
+
+            <div className="flex items-center justify-end gap-3 pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={() => setIsForgotOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                isLoading={forgotLoading}
+              >
+                Send Reset Link
+              </Button>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   );

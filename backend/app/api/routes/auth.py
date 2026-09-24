@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.api.deps import get_db
+from app.core.config import settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -11,7 +12,6 @@ from app.core.security import (
 )
 from app.db.models import User
 from app.schemas.auth import (
-    DirectPasswordResetRequest,
     ForgotPasswordRequest,
     LoginRequest,
     RefreshTokenRequest,
@@ -19,6 +19,7 @@ from app.schemas.auth import (
     ResetPasswordRequest,
     TokenResponse
 )
+from app.services.email import send_password_reset_email
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -132,17 +133,32 @@ def logout():
 
 @router.post("/forgot-password")
 def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == request.email.lower().strip()).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No account found with this email address."
+    email = request.email.lower().strip()
+    user = db.query(User).filter(User.email == email).first()
+
+    dev_url = None
+    # To prevent email enumeration attacks, always return the same generic message.
+    # Only generate and send reset email if user exists and is active.
+    if user and user.is_active:
+        reset_token = create_reset_token(subject=user.id)
+        send_password_reset_email(
+            to_email=user.email,
+            reset_token=reset_token,
+            user_name=user.full_name
         )
-    reset_token = create_reset_token(subject=user.id)
-    return {
-        "message": "Password reset token generated successfully.",
-        "reset_token": reset_token
+        if settings.ENVIRONMENT == "development" and not settings.SMTP_HOST:
+            dev_url = f"{settings.FRONTEND_URL.rstrip('/')}/reset-password?token={reset_token}"
+    elif settings.ENVIRONMENT == "development":
+        print(f"\n[DEV NOTICE] Password reset requested for '{email}', but no registered user with that email was found in the database. Please register first at /register.\n")
+
+    res = {
+        "message": "If an account with that email exists, password reset instructions have been sent to it."
     }
+    if dev_url:
+        res["dev_reset_url"] = dev_url
+        res["dev_note"] = "No SMTP mail server configured in .env. During local testing, you can use this link to test password reset."
+
+    return res
 
 
 @router.post("/reset-password")
@@ -170,17 +186,4 @@ def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db))
     db.commit()
     return {"message": "Password has been successfully reset. You can now log in."}
 
-
-@router.post("/reset-password-direct")
-def reset_password_direct(request: DirectPasswordResetRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == request.email.lower().strip()).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No account found with this email address."
-        )
-    user.password_hash = get_password_hash(request.new_password)
-    db.add(user)
-    db.commit()
-    return {"message": "Password has been successfully reset. You can now log in."}
 

@@ -138,26 +138,30 @@ def test_forgot_password_success(client, test_user):
     )
     assert response.status_code == 200
     data = response.json()
-    assert "reset_token" in data
+    assert "message" in data
+    # Security check: reset_token must NEVER be leaked in the HTTP response
+    assert "reset_token" not in data
 
 
-def test_forgot_password_not_found(client):
+def test_forgot_password_generic_response_for_nonexistent_email(client):
+    # To prevent account enumeration, nonexistent emails get the same generic response
     response = client.post(
         "/api/v1/auth/forgot-password",
         json={"email": "nonexistent@example.com"}
     )
-    assert response.status_code == 404
+    assert response.status_code == 200
+    data = response.json()
+    assert "message" in data
+    assert "reset_token" not in data
 
 
 def test_reset_password_token_flow(client, test_user):
-    # 1. Request token
-    req_res = client.post(
-        "/api/v1/auth/forgot-password",
-        json={"email": test_user.email}
-    )
-    token = req_res.json()["reset_token"]
+    from app.core.security import create_reset_token
 
-    # 2. Reset password
+    # 1. Simulating the secure token generated and emailed to the user
+    token = create_reset_token(subject=test_user.id)
+
+    # 2. Reset password using the token received from the email link
     reset_res = client.post(
         "/api/v1/auth/reset-password",
         json={
@@ -167,6 +171,7 @@ def test_reset_password_token_flow(client, test_user):
         }
     )
     assert reset_res.status_code == 200
+    assert "successfully reset" in reset_res.json()["message"]
 
     # 3. Verify login works with new password
     login_res = client.post(
@@ -176,7 +181,21 @@ def test_reset_password_token_flow(client, test_user):
     assert login_res.status_code == 200
 
 
-def test_reset_password_direct_flow(client, test_user):
+def test_reset_password_invalid_token(client):
+    reset_res = client.post(
+        "/api/v1/auth/reset-password",
+        json={
+            "token": "invalid.or.fake.token",
+            "new_password": "NewSecurePass123!",
+            "confirm_new_password": "NewSecurePass123!"
+        }
+    )
+    assert reset_res.status_code == 400
+    assert "Invalid or expired" in reset_res.json()["detail"]
+
+
+def test_reset_password_direct_removed_for_security(client, test_user):
+    # The insecure direct reset endpoint must be removed
     reset_res = client.post(
         "/api/v1/auth/reset-password-direct",
         json={
@@ -185,11 +204,6 @@ def test_reset_password_direct_flow(client, test_user):
             "confirm_new_password": "AnotherNewPass123!"
         }
     )
-    assert reset_res.status_code == 200
+    assert reset_res.status_code == 404
 
-    login_res = client.post(
-        "/api/v1/auth/login",
-        json={"email": test_user.email, "password": "AnotherNewPass123!"}
-    )
-    assert login_res.status_code == 200
 

@@ -7,6 +7,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ApplicationsPage } from './pages/ApplicationsPage';
 import { ApplicationDetailPage } from './pages/ApplicationDetailPage';
@@ -81,6 +82,14 @@ export const App: React.FC = () => {
                 element={
                   <PublicAuthRoute>
                     <RegisterPage />
+                  </PublicAuthRoute>
+                }
+              />
+              <Route
+                path="/reset-password"
+                element={
+                  <PublicAuthRoute>
+                    <ResetPasswordPage />
                   </PublicAuthRoute>
                 }
               />

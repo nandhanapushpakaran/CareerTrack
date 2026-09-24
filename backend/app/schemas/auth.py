@@ -55,17 +55,3 @@ class ResetPasswordRequest(BaseModel):
             raise ValueError(error_msg)
         return self
 
-
-class DirectPasswordResetRequest(BaseModel):
-    email: EmailStr
-    new_password: str
-    confirm_new_password: str
-
-    @model_validator(mode="after")
-    def validate_direct_passwords(self):
-        if self.new_password != self.confirm_new_password:
-            raise ValueError("New passwords do not match.")
-        is_valid, error_msg = validate_password_strength(self.new_password)
-        if not is_valid:
-            raise ValueError(error_msg)
-        return self
